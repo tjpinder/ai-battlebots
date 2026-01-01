@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "export",
+  images: {
+    unoptimized: true,
+  },
+  // Disable trailing slashes to match SWA's expectations
+  trailingSlash: false,
 };
 
 export default nextConfig;
