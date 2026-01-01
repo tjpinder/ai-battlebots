@@ -10,6 +10,7 @@ import { ArenaConfig, BotConfig, GameState, DamageEvent } from '@/game/types';
 import { getChassisById } from '@/data/chassis';
 import { getWeaponById } from '@/data/weapons';
 import { ReplayRecorder, ReplayData, ReplayBotInfo } from '@/game/replay/ReplaySystem';
+import { LiveCommentaryGenerator, CommentaryEvent } from '@/game/commentary/LiveCommentaryGenerator';
 
 export class GameEngine {
   private app: Application | null = null;
@@ -27,6 +28,8 @@ export class GameEngine {
   private lastTime: number = 0;
   private onStateChange: ((state: GameState) => void) | null = null;
   private onDamageEvent: ((event: DamageEvent) => void) | null = null;
+  private onCommentaryEvent: ((event: CommentaryEvent) => void) | null = null;
+  private commentaryGenerator: LiveCommentaryGenerator = new LiveCommentaryGenerator();
 
   // Replay system
   private replayRecorder: ReplayRecorder | null = null;

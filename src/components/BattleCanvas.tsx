@@ -7,6 +7,8 @@ import { useGameStore } from '@/stores/gameStore';
 import { ArenaConfig, BotConfig } from '@/game/types';
 import { saveReplay, ReplayData } from '@/game/replay/ReplaySystem';
 import { ReplayViewer } from './ReplayViewer';
+import { Commentator, CommentaryEvent } from './Commentator';
+import { LiveCommentaryGenerator } from '@/game/commentary/LiveCommentaryGenerator';
 
 interface BattleCanvasProps {
   arena: ArenaConfig;
@@ -27,6 +29,9 @@ export function BattleCanvas({
     useGameStore();
   const [lastReplay, setLastReplay] = useState<ReplayData | null>(null);
   const [showReplayViewer, setShowReplayViewer] = useState(false);
+  const [commentaryEvents, setCommentaryEvents] = useState<CommentaryEvent[]>([]);
+  const [isCommentaryPlaying, setIsCommentaryPlaying] = useState(false);
+  const commentaryRef = useRef<LiveCommentaryGenerator | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current || engineRef.current) return;
