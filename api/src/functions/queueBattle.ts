@@ -1,7 +1,9 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { TableClient, TableServiceClient } from '@azure/data-tables';
 import { v4 as uuidv4 } from 'uuid';
 import { runHeadlessBattle, BotConfig, BattleResult } from '../battle/simulator';
+
+// Storage is optional - only enabled when STORAGE_CONNECTION_STRING is set
+const STORAGE_ENABLED = !!process.env.STORAGE_CONNECTION_STRING;
 
 interface QueueBattleRequest {
   playerBot: BotConfig;
@@ -78,20 +80,34 @@ DEFAULT circle_right`,
   },
 ];
 
-function getTableClient(): TableClient {
-  const connectionString = process.env.STORAGE_CONNECTION_STRING || 'UseDevelopmentStorage=true';
-  return TableClient.fromConnectionString(connectionString, 'battles');
-}
-
-async function ensureTableExists(): Promise<void> {
-  const connectionString = process.env.STORAGE_CONNECTION_STRING || 'UseDevelopmentStorage=true';
-  const serviceClient = TableServiceClient.fromConnectionString(connectionString);
+async function storeBattle(battleId: string, playerBot: any, opponentBot: BotConfig, result: BattleResult, arenaId: string, now: string): Promise<void> {
+  if (!STORAGE_ENABLED) return;
+  
   try {
-    await serviceClient.createTable('battles');
-  } catch (e: any) {
-    if (e.statusCode !== 409) {
-      throw e;
+    const { TableClient, TableServiceClient } = await import('@azure/data-tables');
+    const connectionString = process.env.STORAGE_CONNECTION_STRING!;
+    
+    const serviceClient = TableServiceClient.fromConnectionString(connectionString);
+    try {
+      await serviceClient.createTable('battles');
+    } catch (e: any) {
+      if (e.statusCode !== 409) throw e;
     }
+    
+    const tableClient = TableClient.fromConnectionString(connectionString, 'battles');
+    await tableClient.createEntity({
+      partitionKey: 'battle',
+      rowKey: battleId,
+      status: 'completed',
+      playerBot: JSON.stringify(playerBot),
+      opponentBot: JSON.stringify(opponentBot),
+      arenaId,
+      result: JSON.stringify(result),
+      createdAt: now,
+      completedAt: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    console.warn('Storage error (non-fatal):', e.message);
   }
 }
 
@@ -133,23 +149,8 @@ export async function queueBattle(request: HttpRequest, context: InvocationConte
       };
     }
 
-    // Store the completed battle
-    await ensureTableExists();
-    const tableClient = getTableClient();
-
-    const entity = {
-      partitionKey: 'battle',
-      rowKey: battleId,
-      status: 'completed',
-      playerBot: JSON.stringify(body.playerBot),
-      opponentBot: JSON.stringify(opponentBot),
-      arenaId: body.arenaId,
-      result: JSON.stringify(result),
-      createdAt: now,
-      completedAt: new Date().toISOString(),
-    };
-
-    await tableClient.createEntity(entity);
+    // Store battle (optional, non-blocking)
+    await storeBattle(battleId, body.playerBot, opponentBot, result, body.arenaId, now);
 
     // Determine if player won
     const playerWon = result.winner === body.playerBot.id;
@@ -180,7 +181,7 @@ export async function queueBattle(request: HttpRequest, context: InvocationConte
           commentary: result.commentary,
         },
         createdAt: now,
-        completedAt: entity.completedAt,
+        completedAt: new Date().toISOString(),
       },
     };
   } catch (error: any) {
