@@ -2,7 +2,7 @@
   "name": "ai-battlebots-api",
   "version": "1.0.0",
   "description": "Azure Functions API for AI Battlebots async battles",
-  "main": "dist/src/functions/*.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
