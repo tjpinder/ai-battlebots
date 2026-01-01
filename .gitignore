@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated JS/TS files in src (should only have .tsx/.ts source files)
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+
+# API build output
+api/dist/
+api/node_modules/

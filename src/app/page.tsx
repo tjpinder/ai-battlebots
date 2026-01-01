@@ -226,6 +226,24 @@ export default function Home() {
                 </div>
               </div>
             </Link>
+
+            {/* Arena - Async Battles */}
+            <Link
+              href="/arena"
+              className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-pink-600 to-rose-600 p-6 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-pink-500/20"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+              <div className="relative z-10">
+                <div className="text-4xl mb-2">🏟️</div>
+                <h2 className="text-2xl font-bold mb-2">Arena</h2>
+                <p className="text-white/70">
+                  Battle with live commentary
+                </p>
+                <div className="mt-4 px-3 py-1 bg-black/30 rounded-lg inline-block">
+                  Animated play-by-play
+                </div>
+              </div>
+            </Link>
           </div>
 
           {/* Active Bot Display */}

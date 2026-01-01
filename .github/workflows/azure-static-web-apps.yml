@@ -31,8 +31,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build Frontend
         run: npm run build
+
+      - name: Install API dependencies
+        run: cd api && npm ci
+
+      - name: Build API
+        run: cd api && npm run build
 
       - name: Deploy to Azure Static Web Apps
         id: deploy
@@ -43,6 +49,7 @@ jobs:
           action: "upload"
           skip_app_build: true
           app_location: "out"
+          api_location: "api"
           output_location: ""
 
   close_pull_request:
