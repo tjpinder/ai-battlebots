@@ -40,6 +40,14 @@ jobs:
       - name: Build API
         run: cd api && npm run build
 
+      - name: Prepare API for deployment
+        run: |
+          cp api/package.json api/dist/
+          cp api/package-lock.json api/dist/
+          cp api/host.json api/dist/
+          cp api/local.settings.json api/dist/ 2>/dev/null || true
+          cd api/dist && npm ci --omit=dev
+
       - name: Deploy to Azure Static Web Apps
         id: deploy
         uses: Azure/static-web-apps-deploy@v1
@@ -49,7 +57,7 @@ jobs:
           action: "upload"
           skip_app_build: true
           app_location: "out"
-          api_location: "api"
+          api_location: "api/dist"
           output_location: ""
 
   close_pull_request:
