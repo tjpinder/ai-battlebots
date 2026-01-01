@@ -50,12 +50,119 @@ export interface DamageEvent {
 
 export interface CommentaryEvent {
   timestamp: number;
-  type: 'start' | 'big_hit' | 'low_hp' | 'comeback' | 'finish' | 'pit_fall' | 'wall_slam';
+  type: 'start' | 'big_hit' | 'low_hp' | 'comeback' | 'finish' | 'pit_fall' | 'wall_slam' | 'banter';
   message: string;
+  speaker: 'chuck' | 'frank' | 'both';
   excitement: number; // 1-10
 }
 
-// Data definitions (simplified for API)
+// Commentary line generators
+const COMMENTARY = {
+  start: {
+    chuck: [
+      (b1: string, b2: string) => `Good evening folks, I'm Chuck Sterling and WELCOME to the Battlebot Championship Series! Tonight: ${b1} versus ${b2}!`,
+      (b1: string, b2: string) => `Ladies and gentlemen, this is the moment you've been waiting for. ${b1} takes on ${b2} in what promises to be an ABSOLUTE DEMOLITION DERBY.`,
+      (b1: string, b2: string) => `From the Thunderdome, it's ${b1} facing off against ${b2}. I haven't been this excited since they legalized competitive robot combat in international waters.`,
+    ],
+    frank: [
+      () => `That's right Chuck, and I'm Frank "The Tank" Mulligan. I once saw a bot like this eat a whole engine block. True story.`,
+      () => `Chuck, I'm so excited I could cry. Actually, I am crying. These are tears of pure mechanical joy.`,
+      () => `You know Chuck, my grandmother always said "Frank, robot fighting is the only true sport." She was a wise woman. She was also a toaster.`,
+    ],
+  },
+  bigHit: {
+    chuck: [
+      (attacker: string, defender: string, dmg: number) => `OH! ${attacker} CONNECTS with a devastating blow! ${Math.round(dmg)} damage to ${defender}!`,
+      (attacker: string, defender: string, dmg: number) => `WHAT A HIT! ${attacker} absolutely CRUSHES ${defender}! That's ${Math.round(dmg)} points of pure destruction!`,
+      (attacker: string, defender: string, dmg: number) => `${attacker} with the MASSIVE strike! ${defender} is reeling from ${Math.round(dmg)} damage!`,
+      (attacker: string, _d: string, dmg: number) => `BOOM! ${attacker} unleashes ${Math.round(dmg)} damage worth of PAIN!`,
+    ],
+    frank: [
+      (attacker: string, _d: string, _dmg: number) => `That's a bold strategy, Cotton— I mean Chuck. ${attacker} is really committing to the "hit them until they stop moving" approach.`,
+      (_a: string, _d: string, _dmg: number) => `You know, in my experience, getting hit like that usually hurts. A lot.`,
+      (attacker: string, _d: string, _dmg: number) => `${attacker} is fighting like they owe someone money. Beautiful.`,
+      (_a: string, _d: string, _dmg: number) => `Ooooh, that's gonna leave a mark. And by mark, I mean a crater.`,
+      (_a: string, _d: string, _dmg: number) => `I felt that one in MY chassis, and I don't even have one!`,
+      (_a: string, defender: string, _dmg: number) => `${defender}'s insurance premiums just went up. Significantly.`,
+    ],
+  },
+  lowHp: {
+    chuck: [
+      (bot: string, hp: number) => `${bot} is in SERIOUS trouble now! Only ${hp} HP remaining!`,
+      (bot: string, hp: number) => `This could be it for ${bot}! ${hp} HP left and fading fast!`,
+      (bot: string, hp: number) => `${bot} is hanging on by a thread with just ${hp} HP!`,
+    ],
+    frank: [
+      (bot: string) => `${bot} is starting to smoke. That's either damage or they're cooking something in there.`,
+      (bot: string) => `At this point, ${bot} is held together by hopes, dreams, and what appears to be duct tape.`,
+      (bot: string) => `${bot} looking like me after Thanksgiving dinner. Barely operational.`,
+      () => `You know what they say: what doesn't kill you makes you... slightly more dented.`,
+      (bot: string) => `${bot}'s check engine light has been on for the last three rounds. They're ignoring it. Bold.`,
+    ],
+  },
+  pitFall: {
+    chuck: [
+      (bot: string) => `OH NO! ${bot} HAS FALLEN INTO THE PIT! IT'S ALL OVER!`,
+      (bot: string) => `${bot} GOES INTO THE PIT! THAT'S A KNOCKOUT!`,
+      (bot: string) => `INTO THE ABYSS! ${bot} is GONE!`,
+    ],
+    frank: [
+      (bot: string) => `And ${bot} discovers what I like to call "the floor's suggestion box." Suggestions are final.`,
+      () => `That's not flying, that's falling with style... into a pit... with no return.`,
+      () => `Gravity: 1, Robot: 0. Tale as old as time.`,
+      (bot: string) => `${bot} just took the express elevator to the basement. The basement has no floors.`,
+    ],
+  },
+  wallSlam: {
+    chuck: [
+      (bot: string) => `${bot} SLAMS into the arena wall! That's gotta hurt!`,
+      (bot: string) => `${bot} just made VIOLENT contact with the wall!`,
+    ],
+    frank: [
+      () => `That wall came out of NOWHERE. In the wall's defense, it was just standing there.`,
+      (bot: string) => `${bot} testing the structural integrity of our arena. Results: the wall wins.`,
+      () => `Fun fact: that wall is undefeated. 847 wins, 0 losses.`,
+      () => `And THAT'S why we have the big walls, folks. Entertainment AND safety.`,
+    ],
+  },
+  finish: {
+    chuck: [
+      (winner: string, hp: number) => `IT'S OVER! ${winner} WINS with ${hp} HP remaining! WHAT A BATTLE!`,
+      (winner: string, hp: number) => `${winner} IS VICTORIOUS! They survive with ${hp} HP! The crowd goes WILD!`,
+      (winner: string, _hp: number) => `THE WINNER IS ${winner.toUpperCase()}! ABSOLUTE DOMINATION!`,
+    ],
+    frank: [
+      (winner: string) => `${winner} proving once again that violence IS the answer. At least in robot combat.`,
+      () => `And that, folks, is why I got into broadcasting. Too scared to actually fight robots.`,
+      () => `Beautiful. Just beautiful. I'm not crying, you're crying. Actually I am crying.`,
+      (winner: string) => `${winner} played that like a fiddle. A fiddle made of steel and hatred.`,
+    ],
+    draw: [
+      () => `IT'S A DRAW! MUTUAL DESTRUCTION! Both bots have been eliminated!`,
+      () => `DOUBLE KNOCKOUT! Neither bot survives! This is UNPRECEDENTED!`,
+    ],
+  },
+  banter: [
+    { speaker: 'frank' as const, line: `You know Chuck, I used to date a battlebot. Didn't work out. She was too high-maintenance.` },
+    { speaker: 'chuck' as const, line: `Let's keep it professional, Frank.` },
+    { speaker: 'frank' as const, line: `I'm sensing some tension out there. Either that or someone forgot to oil their joints.` },
+    { speaker: 'chuck' as const, line: `The strategy here is fascinating. It appears to be "attack relentlessly."` },
+    { speaker: 'frank' as const, line: `Bold strategy. I once tried that in a relationship. Similar results.` },
+    { speaker: 'frank' as const, line: `This is like watching poetry. Violent, metallic poetry.` },
+    { speaker: 'chuck' as const, line: `The engineering on display here is truly remarkable.` },
+    { speaker: 'frank' as const, line: `Almost as remarkable as my fantasy battlebot league. I'm in last place, Chuck.` },
+    { speaker: 'frank' as const, line: `If you can dodge a wrench, you can dodge a spinning blade of death.` },
+    { speaker: 'chuck' as const, line: `I don't think that's how that saying goes, Frank.` },
+    { speaker: 'frank' as const, line: `It's like watching two shopping carts fight in a parking lot. Beautiful.` },
+    { speaker: 'frank' as const, line: `My doctor says I shouldn't get this excited. Worth it.` },
+  ],
+};
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Data definitions
 const CHASSIS: Record<string, { baseHP: number; baseSpeed: number; weight: number; size: number }> = {
   scout: { baseHP: 60, baseSpeed: 8, weight: 50, size: 20 },
   brawler: { baseHP: 100, baseSpeed: 5, weight: 100, size: 25 },
@@ -150,7 +257,6 @@ interface ScriptContext {
 }
 
 function evaluateCondition(condition: string, ctx: ScriptContext): boolean {
-  // Replace variables with values
   let expr = condition
     .replace(/distance_to_enemy/g, ctx.distanceToEnemy.toString())
     .replace(/my_hp_percent/g, ctx.myHpPercent.toString())
@@ -162,7 +268,6 @@ function evaluateCondition(condition: string, ctx: ScriptContext): boolean {
     .replace(/i_am_faster/g, (ctx.mySpeed > ctx.enemySpeed).toString())
     .replace(/i_am_heavier/g, (ctx.myWeight > ctx.enemyWeight).toString());
 
-  // Handle AND/OR
   expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||');
 
   try {
@@ -203,6 +308,17 @@ export function runHeadlessBattle(playerBot: BotConfig, opponentBot: BotConfig, 
   const arena = ARENAS[arenaId] || ARENAS.basicPit;
   const commentary: CommentaryEvent[] = [];
   const damageLog: DamageEvent[] = [];
+
+  // Helper to add commentary
+  function addCommentary(
+    timestamp: number,
+    type: CommentaryEvent['type'],
+    message: string,
+    speaker: CommentaryEvent['speaker'],
+    excitement: number
+  ) {
+    commentary.push({ timestamp, type, message, speaker, excitement });
+  }
 
   // Create Matter.js engine
   const engine = Matter.Engine.create({ gravity: { x: 0, y: 0 } });
@@ -278,24 +394,31 @@ export function runHeadlessBattle(playerBot: BotConfig, opponentBot: BotConfig, 
   const bot2 = createBot(opponentBot, { x: arena.width * 0.75, y: arena.height / 2 });
   const bots = [bot1, bot2];
 
-  // Opening commentary
-  commentary.push({
-    timestamp: 0,
-    type: 'start',
-    message: `${bot1.name} vs ${bot2.name}! Let's see who has the better strategy!`,
-    excitement: 7,
-  });
+  // Opening commentary - Chuck introduces, Frank follows up
+  addCommentary(0, 'start', pick(COMMENTARY.start.chuck)(bot1.name, bot2.name), 'chuck', 8);
+  addCommentary(800, 'start', pick(COMMENTARY.start.frank)(), 'frank', 7);
 
   // Simulation loop
   let timeElapsed = 0;
   let frameCount = 0;
   const deltaTime = 1000 / 60;
   const maxDuration = 60000;
-  let lastCommentaryTime = 0;
+  let lastCommentaryTime = 800;
+  let lowHpWarned: Set<string> = new Set();
+  let banterCount = 0;
+  const maxBanter = 3;
 
   while (timeElapsed < maxDuration) {
     frameCount++;
     timeElapsed += deltaTime;
+
+    // Random banter
+    if (banterCount < maxBanter && timeElapsed > 5000 && Math.random() < 0.0003 && timeElapsed - lastCommentaryTime > 4000) {
+      const banter = pick(COMMENTARY.banter);
+      addCommentary(timeElapsed, 'banter', banter.line, banter.speaker, 5);
+      lastCommentaryTime = timeElapsed;
+      banterCount++;
+    }
 
     // Update each bot's AI
     for (let i = 0; i < bots.length; i++) {
@@ -442,25 +565,46 @@ export function runHeadlessBattle(playerBot: BotConfig, opponentBot: BotConfig, 
               });
 
               // Big hit commentary
-              if (actual > 15 && timeElapsed - lastCommentaryTime > 2000) {
-                commentary.push({
-                  timestamp: timeElapsed,
-                  type: 'big_hit',
-                  message: `Massive hit! ${attacker.name} deals ${Math.round(actual)} damage to ${defender.name}!`,
-                  excitement: Math.min(10, Math.floor(actual / 5) + 5),
-                });
+              if (actual > 12 && timeElapsed - lastCommentaryTime > 2500) {
+                addCommentary(
+                  timeElapsed,
+                  'big_hit',
+                  pick(COMMENTARY.bigHit.chuck)(attacker.name, defender.name, actual),
+                  'chuck',
+                  Math.min(10, Math.floor(actual / 4) + 6)
+                );
                 lastCommentaryTime = timeElapsed;
+
+                // Frank follow-up on really big hits
+                if (actual > 20 && Math.random() > 0.4) {
+                  addCommentary(
+                    timeElapsed + 600,
+                    'big_hit',
+                    pick(COMMENTARY.bigHit.frank)(attacker.name, defender.name, actual),
+                    'frank',
+                    Math.min(10, Math.floor(actual / 5) + 5)
+                  );
+                }
               }
 
               // Low HP commentary
-              if (defender.hp > 0 && defender.hp < defender.maxHp * 0.25 && timeElapsed - lastCommentaryTime > 3000) {
-                commentary.push({
-                  timestamp: timeElapsed,
-                  type: 'low_hp',
-                  message: `${defender.name} is in trouble! Only ${Math.round(defender.hp)} HP left!`,
-                  excitement: 8,
-                });
-                lastCommentaryTime = timeElapsed;
+              if (defender.hp > 0 && defender.hp < defender.maxHp * 0.25 && !lowHpWarned.has(defender.id)) {
+                lowHpWarned.add(defender.id);
+                addCommentary(
+                  timeElapsed + 200,
+                  'low_hp',
+                  pick(COMMENTARY.lowHp.chuck)(defender.name, Math.round(defender.hp)),
+                  'chuck',
+                  8
+                );
+                addCommentary(
+                  timeElapsed + 900,
+                  'low_hp',
+                  pick(COMMENTARY.lowHp.frank)(defender.name),
+                  'frank',
+                  7
+                );
+                lastCommentaryTime = timeElapsed + 900;
               }
 
               if (defender.hp <= 0) {
@@ -481,14 +625,12 @@ export function runHeadlessBattle(playerBot: BotConfig, opponentBot: BotConfig, 
             const damage = (vel - 8) * 2 * (1 - bot.damageReduction);
             bot.hp = Math.max(0, bot.hp - damage);
 
-            if (damage > 10 && timeElapsed - lastCommentaryTime > 2000) {
-              commentary.push({
-                timestamp: timeElapsed,
-                type: 'wall_slam',
-                message: `${bot.name} slams into the wall! That's gonna leave a dent!`,
-                excitement: 6,
-              });
-              lastCommentaryTime = timeElapsed;
+            if (damage > 8 && timeElapsed - lastCommentaryTime > 3000) {
+              addCommentary(timeElapsed, 'wall_slam', pick(COMMENTARY.wallSlam.chuck)(bot.name), 'chuck', 6);
+              if (Math.random() > 0.5) {
+                addCommentary(timeElapsed + 500, 'wall_slam', pick(COMMENTARY.wallSlam.frank)(bot.name), 'frank', 5);
+              }
+              lastCommentaryTime = timeElapsed + 500;
             }
 
             if (bot.hp <= 0) bot.isAlive = false;
@@ -504,13 +646,9 @@ export function runHeadlessBattle(playerBot: BotConfig, opponentBot: BotConfig, 
         if (bot && bot.isAlive) {
           bot.hp = 0;
           bot.isAlive = false;
-          commentary.push({
-            timestamp: timeElapsed,
-            type: 'pit_fall',
-            message: `Oh no! ${bot.name} falls into the pit! It's over for them!`,
-            excitement: 10,
-          });
-          lastCommentaryTime = timeElapsed;
+          addCommentary(timeElapsed, 'pit_fall', pick(COMMENTARY.pitFall.chuck)(bot.name), 'chuck', 10);
+          addCommentary(timeElapsed + 600, 'pit_fall', pick(COMMENTARY.pitFall.frank)(bot.name), 'frank', 9);
+          lastCommentaryTime = timeElapsed + 600;
         }
       }
     }
@@ -522,14 +660,12 @@ export function runHeadlessBattle(playerBot: BotConfig, opponentBot: BotConfig, 
 
   // Final commentary
   const winner = bots.find(b => b.isAlive);
-  commentary.push({
-    timestamp: timeElapsed,
-    type: 'finish',
-    message: winner
-      ? `${winner.name} wins! What a battle! Final HP: ${Math.round(winner.hp)}/${winner.maxHp}`
-      : "It's a draw! Both bots are destroyed!",
-    excitement: 10,
-  });
+  if (winner) {
+    addCommentary(timeElapsed, 'finish', pick(COMMENTARY.finish.chuck)(winner.name, Math.round(winner.hp)), 'chuck', 10);
+    addCommentary(timeElapsed + 800, 'finish', pick(COMMENTARY.finish.frank)(winner.name), 'frank', 9);
+  } else {
+    addCommentary(timeElapsed, 'finish', pick(COMMENTARY.finish.draw)(), 'both', 10);
+  }
 
   // Cleanup
   Matter.Engine.clear(engine);

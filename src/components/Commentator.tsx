@@ -4,52 +4,34 @@ import { useState, useEffect, useRef } from 'react';
 
 export interface CommentaryEvent {
   timestamp: number;
-  type: 'start' | 'big_hit' | 'low_hp' | 'comeback' | 'finish' | 'pit_fall' | 'wall_slam';
+  type: 'start' | 'big_hit' | 'low_hp' | 'comeback' | 'finish' | 'pit_fall' | 'wall_slam' | 'banter';
   message: string;
+  speaker: 'chuck' | 'frank' | 'both';
   excitement: number; // 1-10
 }
 
 interface CommentatorProps {
   commentary: CommentaryEvent[];
   isPlaying: boolean;
-  playbackSpeed?: number; // 1 = real-time, 2 = 2x speed, etc.
+  playbackSpeed?: number;
   onComplete?: () => void;
 }
 
-const COMMENTATOR_EXPRESSIONS = {
-  neutral: '😐',
-  happy: '😄',
-  excited: '🤩',
-  shocked: '😱',
-  sad: '😢',
-  angry: '😠',
+// The two commentator personalities
+const COMMENTATORS = {
+  chuck: {
+    name: 'Chuck Sterling',
+    title: 'Play-by-Play',
+    color: '#3b82f6',
+    silhouette: '👤',
+  },
+  frank: {
+    name: 'Frank "The Tank" Mulligan',
+    title: 'Color Commentary',
+    color: '#f59e0b',
+    silhouette: '👥',
+  },
 };
-
-function getExpression(event: CommentaryEvent): keyof typeof COMMENTATOR_EXPRESSIONS {
-  switch (event.type) {
-    case 'start':
-      return 'happy';
-    case 'big_hit':
-      return event.excitement > 7 ? 'excited' : 'happy';
-    case 'low_hp':
-      return 'shocked';
-    case 'pit_fall':
-      return 'shocked';
-    case 'wall_slam':
-      return 'angry';
-    case 'finish':
-      return event.excitement >= 8 ? 'excited' : 'happy';
-    default:
-      return 'neutral';
-  }
-}
-
-function getExcitementColor(excitement: number): string {
-  if (excitement >= 9) return 'text-red-400';
-  if (excitement >= 7) return 'text-orange-400';
-  if (excitement >= 5) return 'text-yellow-400';
-  return 'text-gray-300';
-}
 
 export function Commentator({
   commentary,
@@ -59,188 +41,270 @@ export function Commentator({
 }: CommentatorProps) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [visibleMessages, setVisibleMessages] = useState<CommentaryEvent[]>([]);
-  const [expression, setExpression] = useState<keyof typeof COMMENTATOR_EXPRESSIONS>('neutral');
+  const [activeSpeaker, setActiveSpeaker] = useState<'chuck' | 'frank' | 'both' | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const startTimeRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const animationRef = useRef<number | null>(null);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [visibleMessages]);
 
-  // Playback logic
   useEffect(() => {
     if (!isPlaying || commentary.length === 0) {
       return;
     }
 
     startTimeRef.current = Date.now();
-    setCurrentIndex(-1);
-    setVisibleMessages([]);
-    setExpression('neutral');
+    let lastIndex = -1;
 
     const playbackLoop = () => {
       const elapsed = (Date.now() - (startTimeRef.current || 0)) * playbackSpeed;
 
-      // Find all events that should have played by now
-      const eventsToShow = commentary.filter(
-        (event, idx) => event.timestamp <= elapsed && idx > currentIndex
-      );
-
-      if (eventsToShow.length > 0) {
-        const latestEvent = eventsToShow[eventsToShow.length - 1];
-        const newIndex = commentary.indexOf(latestEvent);
-
-        setCurrentIndex(newIndex);
-        setVisibleMessages(prev => [...prev, ...eventsToShow]);
-
-        // Animate commentator
-        setExpression(getExpression(latestEvent));
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 500);
+      // Find next event
+      let newIndex = lastIndex;
+      for (let i = lastIndex + 1; i < commentary.length; i++) {
+        if (commentary[i].timestamp <= elapsed) {
+          newIndex = i;
+        } else {
+          break;
+        }
       }
 
-      // Check if we're done
-      if (currentIndex >= commentary.length - 1) {
+      if (newIndex > lastIndex) {
+        const newEvents = commentary.slice(lastIndex + 1, newIndex + 1);
+        setVisibleMessages(prev => [...prev, ...newEvents]);
+        setCurrentIndex(newIndex);
+        lastIndex = newIndex;
+
+        // Animate speaker
+        const latestEvent = newEvents[newEvents.length - 1];
+        setActiveSpeaker(latestEvent.speaker);
+        setIsAnimating(true);
+        setTimeout(() => setIsAnimating(false), 600);
+      }
+
+      if (lastIndex >= commentary.length - 1) {
         onComplete?.();
         return;
       }
 
-      // Continue loop
-      requestAnimationFrame(playbackLoop);
+      animationRef.current = requestAnimationFrame(playbackLoop);
     };
 
-    const animationId = requestAnimationFrame(playbackLoop);
-    return () => cancelAnimationFrame(animationId);
-  }, [isPlaying, commentary, playbackSpeed, onComplete, currentIndex]);
+    animationRef.current = requestAnimationFrame(playbackLoop);
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, [isPlaying, commentary, playbackSpeed, onComplete]);
 
-  // Reset when commentary changes
   useEffect(() => {
     setCurrentIndex(-1);
     setVisibleMessages([]);
-    setExpression('neutral');
+    setActiveSpeaker(null);
   }, [commentary]);
 
   return (
-    <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
-      {/* Commentator Box */}
-      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 p-4 flex items-center gap-4">
-        {/* Animated Commentator Avatar */}
-        <div
-          className={`w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center text-3xl transition-transform duration-200 ${
-            isAnimating ? 'scale-110' : 'scale-100'
-          }`}
-        >
-          {COMMENTATOR_EXPRESSIONS[expression]}
-        </div>
-
-        {/* Commentator Info */}
-        <div className="flex-1">
-          <div className="font-bold text-white flex items-center gap-2">
-            <span>BATTLEBOT ARENA</span>
-            {isPlaying && (
-              <span className="px-2 py-0.5 bg-red-500 text-xs rounded animate-pulse">
-                LIVE
-              </span>
-            )}
+    <div className="bg-gray-900 rounded-xl overflow-hidden border-2 border-yellow-600/50">
+      {/* Channel Header - "The Ocho" style */}
+      <div className="bg-gradient-to-r from-red-800 via-red-700 to-red-800 px-4 py-2 flex items-center justify-between border-b-2 border-yellow-500">
+        <div className="flex items-center gap-3">
+          <div className="bg-yellow-500 text-black font-black px-2 py-0.5 text-sm rounded">
+            BB8
           </div>
-          <div className="text-purple-300 text-sm">
-            Your commentators: Bot & Botty
+          <span className="font-bold text-white tracking-wide">
+            BATTLEBOT CHAMPIONSHIP SERIES
+          </span>
+        </div>
+        {isPlaying && (
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-xs font-bold text-red-300 uppercase tracking-wider">
+              Live from the Thunderdome
+            </span>
           </div>
-        </div>
-
-        {/* Sound Visualizer (decorative) */}
-        <div className="flex items-end gap-0.5 h-8">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className={`w-1 bg-green-400 rounded-t transition-all duration-150 ${
-                isAnimating ? 'animate-bounce' : ''
-              }`}
-              style={{
-                height: isAnimating ? `${20 + Math.random() * 60}%` : '20%',
-                animationDelay: `${i * 50}ms`,
-              }}
-            />
-          ))}
-        </div>
+        )}
       </div>
 
-      {/* Message Feed */}
-      <div className="h-64 overflow-y-auto p-4 space-y-3">
+      {/* Commentary Feed */}
+      <div className="h-48 overflow-y-auto p-3 space-y-2 bg-gray-800/50">
         {visibleMessages.length === 0 ? (
-          <div className="text-gray-500 text-center py-8">
-            {isPlaying ? 'Starting commentary...' : 'Commentary will appear here'}
+          <div className="text-gray-500 text-center py-8 italic">
+            {isPlaying ? '"And here... we... GO!"' : 'Waiting for the action to begin...'}
           </div>
         ) : (
           visibleMessages.map((event, idx) => (
-            <CommentaryMessage key={idx} event={event} isLatest={idx === visibleMessages.length - 1} />
+            <CommentaryBubble
+              key={idx}
+              event={event}
+              isLatest={idx === visibleMessages.length - 1}
+            />
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* MST3K-style Silhouettes at Bottom */}
+      <div className="relative h-24 bg-gradient-to-t from-black via-gray-900 to-transparent">
+        {/* Screen glow effect */}
+        <div className="absolute inset-0 bg-gradient-to-t from-blue-900/20 to-transparent pointer-events-none" />
+
+        {/* Commentator Silhouettes */}
+        <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end px-8">
+          {/* Chuck - Left */}
+          <div
+            className={`transition-all duration-300 ${
+              activeSpeaker === 'chuck' || activeSpeaker === 'both'
+                ? 'scale-110 translate-y-[-4px]'
+                : 'scale-100'
+            }`}
+          >
+            <div className="relative">
+              {/* Speech indicator */}
+              {(activeSpeaker === 'chuck' || activeSpeaker === 'both') && isAnimating && (
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-1.5 h-3 bg-blue-400 rounded-full animate-bounce"
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Silhouette */}
+              <svg viewBox="0 0 60 80" className="w-16 h-20 fill-black">
+                <ellipse cx="30" cy="18" rx="14" ry="16" />
+                <path d="M10 80 L15 45 L30 50 L45 45 L50 80 Z" />
+                <rect x="22" y="32" width="16" height="15" rx="2" />
+              </svg>
+              <div className={`absolute bottom-0 left-0 right-0 text-center text-xs font-bold transition-colors ${
+                activeSpeaker === 'chuck' ? 'text-blue-400' : 'text-gray-600'
+              }`}>
+                CHUCK
+              </div>
+            </div>
+          </div>
+
+          {/* Center - Logo/Stats */}
+          <div className="text-center mb-4">
+            <div className="text-yellow-500 text-xs font-bold tracking-widest">
+              THE OCHO PRESENTS
+            </div>
+            <div className="text-white/60 text-[10px]">
+              "If it's almost a sport, we've got it here."
+            </div>
+          </div>
+
+          {/* Frank - Right */}
+          <div
+            className={`transition-all duration-300 ${
+              activeSpeaker === 'frank' || activeSpeaker === 'both'
+                ? 'scale-110 translate-y-[-4px]'
+                : 'scale-100'
+            }`}
+          >
+            <div className="relative">
+              {/* Speech indicator */}
+              {(activeSpeaker === 'frank' || activeSpeaker === 'both') && isAnimating && (
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2">
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map(i => (
+                      <div
+                        key={i}
+                        className="w-1.5 h-3 bg-yellow-400 rounded-full animate-bounce"
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Silhouette - slightly larger/different shape */}
+              <svg viewBox="0 0 60 80" className="w-16 h-20 fill-black">
+                <ellipse cx="30" cy="16" rx="15" ry="14" />
+                <path d="M8 80 L12 42 L30 48 L48 42 L52 80 Z" />
+                <rect x="20" y="28" width="20" height="16" rx="2" />
+              </svg>
+              <div className={`absolute bottom-0 left-0 right-0 text-center text-xs font-bold transition-colors ${
+                activeSpeaker === 'frank' ? 'text-yellow-400' : 'text-gray-600'
+              }`}>
+                FRANK
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function CommentaryMessage({ event, isLatest }: { event: CommentaryEvent; isLatest: boolean }) {
-  const typeIcons: Record<CommentaryEvent['type'], string> = {
-    start: '🎬',
-    big_hit: '💥',
-    low_hp: '⚠️',
-    comeback: '🔥',
-    finish: '🏆',
-    pit_fall: '🕳️',
-    wall_slam: '💢',
-  };
+function CommentaryBubble({ event, isLatest }: { event: CommentaryEvent; isLatest: boolean }) {
+  const speaker = COMMENTATORS[event.speaker === 'both' ? 'chuck' : event.speaker];
+  const isBoth = event.speaker === 'both';
 
   return (
-    <div
-      className={`flex items-start gap-3 ${
-        isLatest ? 'animate-fade-in' : ''
-      }`}
-    >
-      <div className="text-xl">{typeIcons[event.type]}</div>
+    <div className={`flex items-start gap-2 ${isLatest ? 'animate-fade-in' : ''}`}>
+      {/* Speaker indicator */}
+      <div
+        className={`w-1 self-stretch rounded-full ${
+          event.speaker === 'chuck' ? 'bg-blue-500' :
+          event.speaker === 'frank' ? 'bg-yellow-500' :
+          'bg-gradient-to-b from-blue-500 to-yellow-500'
+        }`}
+      />
+
       <div className="flex-1">
-        <div className={`font-medium ${getExcitementColor(event.excitement)}`}>
-          {event.message}
-        </div>
-        <div className="text-xs text-gray-500 mt-0.5">
-          {(event.timestamp / 1000).toFixed(1)}s
+        {/* Speaker name */}
+        <div className="flex items-center gap-2 mb-0.5">
+          <span
+            className="text-xs font-bold uppercase tracking-wide"
+            style={{ color: isBoth ? '#fff' : speaker.color }}
+          >
+            {isBoth ? 'CHUCK & FRANK' : speaker.name}
+          </span>
           {event.excitement >= 8 && (
-            <span className="ml-2 text-yellow-400">
-              {'!'.repeat(event.excitement - 7)}
+            <span className="text-xs text-red-400 animate-pulse">
+              {'🔥'.repeat(Math.min(3, event.excitement - 7))}
             </span>
           )}
         </div>
+
+        {/* Message */}
+        <div className={`text-sm ${
+          event.excitement >= 8 ? 'text-white font-medium' :
+          event.excitement >= 5 ? 'text-gray-200' :
+          'text-gray-400'
+        }`}>
+          {event.message}
+        </div>
       </div>
-      {/* Excitement meter */}
-      <div className="flex gap-0.5">
-        {[...Array(10)].map((_, i) => (
-          <div
-            key={i}
-            className={`w-1 h-4 rounded ${
-              i < event.excitement ? 'bg-yellow-400' : 'bg-gray-700'
-            }`}
-          />
-        ))}
+
+      {/* Timestamp */}
+      <div className="text-[10px] text-gray-600 tabular-nums">
+        {(event.timestamp / 1000).toFixed(1)}s
       </div>
     </div>
   );
 }
 
-// Instant playback - shows all messages immediately
+// Instant playback version
 export function CommentaryFeed({ commentary }: { commentary: CommentaryEvent[] }) {
   return (
-    <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
-      <div className="bg-gradient-to-r from-purple-900 to-indigo-900 p-3 flex items-center gap-3">
-        <div className="text-2xl">🎙️</div>
-        <div className="font-bold text-white">Battle Commentary</div>
+    <div className="bg-gray-900 rounded-xl overflow-hidden border-2 border-yellow-600/50">
+      <div className="bg-gradient-to-r from-red-800 via-red-700 to-red-800 px-4 py-2 border-b-2 border-yellow-500">
+        <div className="flex items-center gap-3">
+          <div className="bg-yellow-500 text-black font-black px-2 py-0.5 text-sm rounded">
+            BB8
+          </div>
+          <span className="font-bold text-white">FULL COMMENTARY LOG</span>
+        </div>
       </div>
-      <div className="max-h-80 overflow-y-auto p-4 space-y-3">
+      <div className="max-h-80 overflow-y-auto p-3 space-y-2">
         {commentary.map((event, idx) => (
-          <CommentaryMessage key={idx} event={event} isLatest={false} />
+          <CommentaryBubble key={idx} event={event} isLatest={false} />
         ))}
       </div>
     </div>
