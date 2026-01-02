@@ -60,7 +60,7 @@ export class GameEngine {
       antialias: false,
       resolution: 1,
       autoDensity: false,
-      powerPreference: 'default',
+      
       preferWebGLVersion: 1,
     });
 
