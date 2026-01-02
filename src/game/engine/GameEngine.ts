@@ -19,6 +19,8 @@ export class GameEngine {
   private arenaGraphics: Graphics | null = null;
   private particles: ParticleSystem | null = null;
   private isDestroyed: boolean = false;
+  private contextLost: boolean = false;
+  private canvas: HTMLCanvasElement | null = null;
 
   private bots: Map<string, Bot> = new Map();
   private aiControllers: Map<string, AIController> = new Map();
@@ -55,9 +57,11 @@ export class GameEngine {
       width,
       height,
       backgroundColor: 0x1a1a2e,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
+      antialias: false,
+      resolution: 1,
+      autoDensity: false,
+      powerPreference: 'default',
+      preferWebGLVersion: 1,
     });
 
     // Check if we were destroyed during async init
@@ -72,6 +76,12 @@ export class GameEngine {
     }
 
     this.app = app;
+    this.canvas = canvas;
+
+    // Handle WebGL context loss
+    canvas.addEventListener('webglcontextlost', this.handleContextLost);
+    canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
+
     this.gameContainer = new Container();
     this.app.stage.addChild(this.gameContainer);
 
@@ -496,8 +506,24 @@ export class GameEngine {
     this.gameLoop();
   }
 
+  private handleContextLost = (event: Event): void => {
+    event.preventDefault();
+    console.warn('WebGL context lost - pausing game');
+    this.contextLost = true;
+    this.pause();
+  };
+
+  private handleContextRestored = (): void => {
+    console.log('WebGL context restored - resuming game');
+    this.contextLost = false;
+    // Redraw arena after context restore
+    if (this.state.arena) {
+      this.drawArena(this.state.arena);
+    }
+  };
+
   private gameLoop = (): void => {
-    if (!this.state.isRunning || this.state.isPaused) return;
+    if (!this.state.isRunning || this.state.isPaused || this.contextLost) return;
 
     const now = performance.now();
     const deltaTime = now - this.lastTime;
@@ -712,6 +738,13 @@ export class GameEngine {
 
   destroy(): void {
     this.isDestroyed = true;
+
+    // Remove context loss listeners
+    if (this.canvas) {
+      this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
+      this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
+      this.canvas = null;
+    }
     this.stop();
     this.reset();
     this.physics.destroy();

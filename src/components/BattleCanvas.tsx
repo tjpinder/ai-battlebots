@@ -32,6 +32,7 @@ export function BattleCanvas({
   const [commentaryEvents, setCommentaryEvents] = useState<CommentaryEvent[]>([]);
   const [isCommentaryPlaying, setIsCommentaryPlaying] = useState(false);
   const commentaryRef = useRef<LiveCommentaryGenerator | null>(null);
+  const battleStartTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (!canvasRef.current || engineRef.current) return;
@@ -43,6 +44,16 @@ export function BattleCanvas({
 
       const engine = new GameEngine();
       engineRef.current = engine;
+
+      // Initialize live commentary generator
+      const commentary = new LiveCommentaryGenerator();
+      commentaryRef.current = commentary;
+
+      // Set up commentary callback to update React state
+      commentary.setCommentaryCallback((event) => {
+        if (!mounted) return;
+        setCommentaryEvents(prev => [...prev, event]);
+      });
 
       await engine.initialize(canvasRef.current, arena.width, arena.height);
 
@@ -70,13 +81,24 @@ export function BattleCanvas({
         if (!mounted) return;
         setGameState(state);
 
+        // Update commentary with state (for low HP detection, banter, etc.)
+        const currentTime = Date.now() - battleStartTimeRef.current;
+        commentaryRef.current?.onStateUpdate(state, currentTime);
+
         if (!state.isRunning && state.winner !== undefined) {
           const winner = bots.find((b) => b.id === state.winner);
           if (winner) {
             addBattleLog(`${winner.name} WINS!`);
+            // Trigger end commentary
+            commentaryRef.current?.onBattleEnd(winner.name, currentTime);
           } else if (state.winner === null) {
             addBattleLog('DRAW!');
           }
+
+          commentaryRef.current?.onBattleEnd('Nobody', currentTime);
+
+          // Stop commentary playback indicator
+          setIsCommentaryPlaying(false);
 
           // Stop recording and save replay
           if (engine.isCurrentlyRecording()) {
@@ -96,6 +118,11 @@ export function BattleCanvas({
       engine.setOnDamageEvent((event) => {
         if (!mounted) return;
         addDamageEvent(event);
+
+        // Feed damage to commentary generator
+        const currentTime = Date.now() - battleStartTimeRef.current;
+        commentaryRef.current?.onDamage(event, currentTime);
+
         const attacker = bots.find((b) => b.id === event.attackerId);
         const target = bots.find((b) => b.id === event.targetId);
         if (attacker && target && event.damage > 5) {
@@ -113,6 +140,15 @@ export function BattleCanvas({
         addBattleLog('FIGHT!');
         SoundManager.resume();
         SoundManager.play('battleStart');
+
+        // Start live commentary
+        battleStartTimeRef.current = Date.now();
+        setCommentaryEvents([]);
+        setIsCommentaryPlaying(true);
+        commentaryRef.current?.reset();
+        if (bots.length >= 2) {
+          commentaryRef.current?.onBattleStart(bots[0].name, bots[1].name);
+        }
       }
     };
 
@@ -124,6 +160,7 @@ export function BattleCanvas({
         engineRef.current.destroy();
         engineRef.current = null;
       }
+      commentaryRef.current = null;
       setInitialized(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,6 +176,15 @@ export function BattleCanvas({
     SoundManager.play('battleStart');
     addBattleLog('FIGHT!');
     setLastReplay(null);
+
+    // Start live commentary
+    battleStartTimeRef.current = Date.now();
+    setCommentaryEvents([]);
+    setIsCommentaryPlaying(true);
+    commentaryRef.current?.reset();
+    if (bots.length >= 2) {
+      commentaryRef.current?.onBattleStart(bots[0].name, bots[1].name);
+    }
   };
 
   const handlePause = () => {
@@ -172,11 +218,26 @@ export function BattleCanvas({
       engine.addBot(botConfig, pos);
     });
 
+    // Reset commentary
+    setCommentaryEvents([]);
+    setIsCommentaryPlaying(false);
+    commentaryRef.current?.reset();
+
     addBattleLog('Arena reset');
   };
 
   return (
     <div className="flex flex-col items-center gap-4">
+      {/* Live Commentary Panel */}
+      <div className="w-full max-w-2xl">
+        <Commentator
+          commentary={commentaryEvents}
+          isPlaying={isCommentaryPlaying}
+          playbackSpeed={1}
+          onComplete={() => setIsCommentaryPlaying(false)}
+        />
+      </div>
+
       <canvas
         ref={canvasRef}
         className="border-4 border-gray-700 rounded-lg shadow-2xl"
