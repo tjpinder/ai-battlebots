@@ -212,8 +212,8 @@ export default function BattlePage() {
 
       {/* Battle Result Modal */}
       {battleResult && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-xl p-8 text-center max-w-md">
+        <div className="fixed inset-x-0 bottom-0 top-1/3 bg-gradient-to-t from-black/90 via-black/70 to-transparent flex items-center justify-center z-50 pointer-events-none">
+          <div className="bg-gray-800 rounded-xl p-8 text-center max-w-md shadow-2xl border border-gray-700 pointer-events-auto">
             <h2
               className={`text-4xl font-bold mb-4 ${
                 battleResult === 'win' ? 'text-green-400' : 'text-red-400'
