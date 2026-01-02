@@ -235,6 +235,7 @@ export function BattleCanvas({
           isPlaying={isCommentaryPlaying}
           playbackSpeed={1}
           onComplete={() => setIsCommentaryPlaying(false)}
+          enableVoice={true}
         />
       </div>
 

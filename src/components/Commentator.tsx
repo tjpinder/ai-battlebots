@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSpeech } from '@/hooks/useSpeech';
 
 export interface CommentaryEvent {
   timestamp: number;
@@ -15,6 +16,7 @@ interface CommentatorProps {
   isPlaying: boolean;
   playbackSpeed?: number;
   onComplete?: () => void;
+  enableVoice?: boolean;
 }
 
 // The two commentator personalities
@@ -38,6 +40,7 @@ export function Commentator({
   isPlaying,
   playbackSpeed = 1,
   onComplete,
+  enableVoice = false,
 }: CommentatorProps) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [visibleMessages, setVisibleMessages] = useState<CommentaryEvent[]>([]);
@@ -47,6 +50,9 @@ export function Commentator({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
   const lastLengthRef = useRef(0);
+
+  // Voice commentary
+  const { isEnabled: voiceEnabled, isMuted, toggleMute, speak, stop } = useSpeech();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -121,13 +127,25 @@ export function Commentator({
 
       // Animate the latest speaker
       const latestEvent = newEvents[newEvents.length - 1];
+      // Speak the new event
+      if (enableVoice) {
+        speak(latestEvent.message, latestEvent.speaker);
+      }
       setActiveSpeaker(latestEvent.speaker);
       setIsAnimating(true);
       setTimeout(() => setIsAnimating(false), 600);
     }
 
     lastLengthRef.current = commentary.length;
-  }, [commentary]);
+  }, [commentary, enableVoice, speak]);
+
+  // Stop speech when battle ends or component unmounts
+  useEffect(() => {
+    if (!isPlaying) {
+      stop();
+    }
+    return () => stop();
+  }, [isPlaying, stop]);
 
   return (
     <div className="bg-gray-900 rounded-xl overflow-hidden border-2 border-yellow-600/50">
@@ -141,14 +159,34 @@ export function Commentator({
             BATTLEBOT CHAMPIONSHIP SERIES
           </span>
         </div>
-        {isPlaying && (
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-xs font-bold text-red-300 uppercase tracking-wider">
-              Live from the Thunderdome
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isPlaying && (
+            <>
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-xs font-bold text-red-300 uppercase tracking-wider">
+                Live
+              </span>
+            </>
+          )}
+          {enableVoice && voiceEnabled && (
+            <button
+              onClick={toggleMute}
+              className="ml-2 p-1.5 rounded-full hover:bg-white/10 transition-colors"
+              title={isMuted ? 'Unmute commentary' : 'Mute commentary'}
+            >
+              {isMuted ? (
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Commentary Feed */}
