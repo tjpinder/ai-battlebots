@@ -119,12 +119,12 @@ export function BattleCanvas({
         if (!mounted) return;
         addDamageEvent(event);
 
-        // Feed damage to commentary generator
+        // Feed damage to commentary generator with bot names
         const currentTime = Date.now() - battleStartTimeRef.current;
-        commentaryRef.current?.onDamage(event, currentTime);
-
         const attacker = bots.find((b) => b.id === event.attackerId);
         const target = bots.find((b) => b.id === event.targetId);
+        commentaryRef.current?.onDamage(event, currentTime, attacker?.name, target?.name);
+
         if (attacker && target && event.damage > 5) {
           addBattleLog(
             `${attacker.name} hits ${target.name} for ${Math.floor(event.damage)} damage!`

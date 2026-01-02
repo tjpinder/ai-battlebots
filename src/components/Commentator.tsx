@@ -46,6 +46,7 @@ export function Commentator({
   const startTimeRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
+  const lastLengthRef = useRef(0);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
