@@ -100,10 +100,33 @@ export function Commentator({
     };
   }, [isPlaying, commentary, playbackSpeed, onComplete]);
 
+  // For live commentary: detect new events and append them
   useEffect(() => {
-    setCurrentIndex(-1);
-    setVisibleMessages([]);
-    setActiveSpeaker(null);
+    // If commentary was reset (empty array), clear everything
+    if (commentary.length === 0) {
+      if (lastLengthRef.current > 0) {
+        setCurrentIndex(-1);
+        setVisibleMessages([]);
+        setActiveSpeaker(null);
+      }
+      lastLengthRef.current = 0;
+      return;
+    }
+
+    // If new events were added, append them immediately (live mode)
+    if (commentary.length > lastLengthRef.current) {
+      const newEvents = commentary.slice(lastLengthRef.current);
+      setVisibleMessages(prev => [...prev, ...newEvents]);
+      setCurrentIndex(commentary.length - 1);
+
+      // Animate the latest speaker
+      const latestEvent = newEvents[newEvents.length - 1];
+      setActiveSpeaker(latestEvent.speaker);
+      setIsAnimating(true);
+      setTimeout(() => setIsAnimating(false), 600);
+    }
+
+    lastLengthRef.current = commentary.length;
   }, [commentary]);
 
   return (
