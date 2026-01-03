@@ -17,7 +17,7 @@ const VOICE_CONFIG = {
 };
 
 class SpeechServiceClass {
-  private synthesizer: sdk.SpeechSynthesizer | null = null;
+  private speechConfig: sdk.SpeechConfig | null = null;
   private audioContext: AudioContext | null = null;
   private isInitialized: boolean = false;
   private isMuted: boolean = false;
@@ -25,6 +25,8 @@ class SpeechServiceClass {
   private speechQueue: Array<{ text: string; speaker: 'chuck' | 'frank' }> = [];
   private isSpeaking: boolean = false;
   private enabled: boolean = true;
+  private gainNode: GainNode | null = null;
+  private currentSource: AudioBufferSourceNode | null = null;
 
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
@@ -39,12 +41,15 @@ class SpeechServiceClass {
     }
 
     try {
-      const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
-      speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
+      this.speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
+      // Use WAV format - widely supported by Web Audio API
+      this.speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm;
 
-      // Use default speaker output
-      const audioConfig = sdk.AudioConfig.fromDefaultSpeakerOutput();
-      this.synthesizer = new sdk.SpeechSynthesizer(speechConfig, audioConfig);
+      // Initialize Web Audio API
+      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.connect(this.audioContext.destination);
+      this.gainNode.gain.value = this.volume;
 
       this.isInitialized = true;
       console.log('Azure Speech Service initialized');
@@ -114,27 +119,67 @@ class SpeechServiceClass {
   }
 
   private async speakImmediate(text: string, speaker: 'chuck' | 'frank'): Promise<void> {
-    if (!this.synthesizer || !this.enabled) return;
+    if (!this.speechConfig || !this.audioContext || !this.gainNode || !this.enabled) return;
+
+    // Resume audio context if suspended (browser autoplay policy)
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
 
     return new Promise((resolve) => {
       const ssml = this.buildSSML(text, speaker);
 
-      this.synthesizer!.speakSsmlAsync(
+      // Create a synthesizer without audio output - we'll handle playback ourselves
+      const synthesizer = new sdk.SpeechSynthesizer(this.speechConfig!, undefined as unknown as sdk.AudioConfig);
+
+      synthesizer.speakSsmlAsync(
         ssml,
-        (result) => {
-          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-            // Successfully synthesized
+        async (result) => {
+          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted && result.audioData) {
+            try {
+              // Decode the WAV audio data
+              const audioBuffer = await this.audioContext!.decodeAudioData(result.audioData.slice(0));
+
+              // Play through Web Audio API
+              await this.playAudioBuffer(audioBuffer);
+            } catch (error) {
+              console.error('Failed to decode/play audio:', error);
+            }
           } else if (result.reason === sdk.ResultReason.Canceled) {
             const cancellation = sdk.CancellationDetails.fromResult(result);
-            console.warn('Speech synthesis canceled:', cancellation.reason);
+            console.warn('Speech synthesis canceled:', cancellation.reason, cancellation.errorDetails);
           }
+          synthesizer.close();
           resolve();
         },
         (error) => {
           console.error('Speech synthesis error:', error);
+          synthesizer.close();
           resolve();
         }
       );
+    });
+  }
+
+  private playAudioBuffer(audioBuffer: AudioBuffer): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.audioContext || !this.gainNode) {
+        resolve();
+        return;
+      }
+
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.gainNode);
+
+      this.currentSource = source;
+
+      source.onended = () => {
+        this.currentSource = null;
+        resolve();
+      };
+
+      source.start(0);
     });
   }
 
@@ -151,6 +196,9 @@ class SpeechServiceClass {
 
   setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(1, volume));
+    if (this.gainNode) {
+      this.gainNode.gain.value = this.volume;
+    }
   }
 
   getVolume(): number {
@@ -159,8 +207,14 @@ class SpeechServiceClass {
 
   stop(): void {
     this.speechQueue = [];
-    // Note: Azure SDK doesn't have a clean way to stop mid-speech
-    // The current utterance will complete, but queue is cleared
+    if (this.currentSource) {
+      try {
+        this.currentSource.stop();
+      } catch {
+        // Already stopped
+      }
+      this.currentSource = null;
+    }
   }
 
   isEnabled(): boolean {
@@ -168,10 +222,13 @@ class SpeechServiceClass {
   }
 
   destroy(): void {
-    if (this.synthesizer) {
-      this.synthesizer.close();
-      this.synthesizer = null;
+    this.stop();
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
     }
+    this.gainNode = null;
+    this.speechConfig = null;
     this.isInitialized = false;
   }
 }
